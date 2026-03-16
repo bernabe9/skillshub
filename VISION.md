@@ -20,9 +20,13 @@ Teams copy skill directories into each agent's expected path — `.claude/skills
 
 Once installed, skills are snapshots. There is no push mechanism — developers must manually `git pull` or `npx skills update` to get changes. In fast-moving teams, skills drift from the latest version within days. Claude Enterprise can admin-provision skills that auto-appear for org users, but this is Claude-only and doesn't extend to other agents.
 
-### 3. Skills can't be improved where they're used
+### 3. Plugins are static and agent-specific
 
-The most valuable skill improvements happen during use — when a developer discovers a missing step, an outdated command, or a better approach. Today, this feedback loop is broken: the developer must exit their conversation, find the skill file, edit it manually, commit, push, and hope teammates notice. No tool supports proposing skill improvements from within an agent conversation.
+Claude Code introduced plugins — versioned bundles that package skills, agents, hooks, and MCP servers for distribution via git-based marketplaces. Plugins solve some distribution problems, but they're Claude-only and static: skills are packaged at publish time and can't be improved from within a conversation. Updating a skill means editing the plugin source, re-publishing, and waiting for teammates to update. Other agents (OpenClaw, Cursor, Copilot) have no equivalent plugin system, so skills in plugins don't reach them at all.
+
+### 4. Skills can't be improved where they're used
+
+The most valuable skill improvements happen during use — when someone discovers a missing step, an outdated command, or a better approach. Today, this feedback loop is broken: the user must exit their conversation, find the skill file, edit it manually, commit, push, and hope teammates notice. No tool supports proposing skill improvements from within an agent conversation.
 
 ## Market Landscape
 
@@ -30,6 +34,7 @@ After researching 20+ tools in the agent skills ecosystem, here is the current s
 
 | Product | Centralized | Always Fresh | Write-Back | Multi-Agent | Org Management |
 |---------|:-----------:|:------------:|:----------:|:-----------:|:--------------:|
+| **Claude Plugins** | Git marketplaces | Auto-update | No | Claude only | Via marketplace |
 | **skills.sh** (Vercel) | GitHub-backed | Pull-based | No | 40+ agents | No |
 | **SkillReg.dev** | Private registry | Pull-based | No | Multiple | Yes |
 | **Claude Enterprise** | Admin console | Auto-provision | No | Claude only | Yes |
