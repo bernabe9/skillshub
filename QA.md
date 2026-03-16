@@ -117,10 +117,14 @@ Start a **new** Claude Code session for each test.
 
 ### Setup
 
-1. **Install skillshub** on the machine where Cowork runs:
+Cowork runs on your local machine but executes commands in a sandboxed Linux VM. It cannot run `skillshub sync`. It accesses skills entirely through MCP tools.
+
+All setup steps are done from **your terminal**, not Cowork:
+
+1. **Install skillshub:**
    ```bash
    uv tool install /path/to/skillshub
-   # or: pip install git+https://github.com/your-org/skillshub.git
+   # or: pip install git+https://github.com/bernabe9/skillshub.git
    ```
 
 2. **Init skillshub:**
@@ -128,49 +132,53 @@ Start a **new** Claude Code session for each test.
    skillshub init https://github.com/your-org/skills.git
    ```
 
-3. **Add MCP server** to `claude_desktop_config.json`:
+3. **Add MCP server** to `~/Library/Application Support/Claude/claude_desktop_config.json`:
    ```json
    {
      "mcpServers": {
        "skillshub": {
-         "command": "skillshub",
-         "args": ["mcp"]
+         "command": "/full/path/to/uv",
+         "args": ["run", "--project", "/path/to/skillshub", "skillshub", "mcp"]
        }
      }
    }
    ```
+   > **Important:** Use full absolute paths (`which uv` to find yours). Desktop apps don't inherit your shell's PATH.
 
 4. **Restart Claude Desktop** to pick up the MCP config.
 
 ### Test Cases
 
 #### T1: MCP server connected
-- Open Cowork, check MCP server status
-- **Expected:** `skillshub` appears as connected
+- Open Cowork settings or start a conversation
+- **Expected:** No "MCP skillshub: Server disconnected" error. If you see this error, the path to `uv` is wrong — use `which uv` to get the full path.
 
-#### T2: Agent syncs skills on demand
-- Say "run `skillshub sync` to pull the latest skills"
-- **Expected:** Agent runs the command, skills land in `~/.agents/skills/`
+#### T2: Skill discovery via MCP
+- Say "what skills are available in skillshub?"
+- **Expected:** Cowork calls `list_skills` MCP tool, shows skill names and descriptions
 
-#### T3: Skill discovery
-- Say "what skills do I have?"
-- **Expected:** Agent lists skills (either from filesystem after sync, or by running `skillshub list`)
+#### T3: Load a skill via MCP
+- Say "load the hello-world skill from skillshub and follow its instructions"
+- **Expected:** Cowork calls `get_skill` MCP tool, reads the SKILL.md content, follows the instructions
 
-#### T4: Skill activation
-- Say "say hello" (assuming hello-world skill exists)
-- **Expected:** Agent finds and follows the skill instructions
-
-#### T5: Write-back (update_skill)
+#### T4: Write-back (update_skill)
 - Say "update the hello-world skill to also include a fun fact"
-- **Expected:** Agent calls `update_skill` MCP tool, commit appears on GitHub
+- **Expected:** Cowork calls `update_skill` MCP tool, commit appears on GitHub
 
-#### T6: Write-back (create_skill)
+#### T5: Write-back (create_skill)
 - Say "create a skill called meeting-notes that summarizes meeting transcripts"
-- **Expected:** Agent calls `create_skill` MCP tool, skill appears on GitHub
+- **Expected:** Cowork calls `create_skill` MCP tool, skill appears on GitHub
+
+#### T6: Cross-agent verify
+- After creating/updating a skill from Cowork, run `skillshub sync` in your terminal
+- Start a new Claude Code session
+- **Expected:** The skill created from Cowork is available natively in Claude Code
 
 ### Known Gotchas
-- Cowork doesn't have SessionStart hooks — the agent must be told to run `skillshub sync` or it needs to discover skills through the filesystem after a manual sync.
-- If skillshub isn't in PATH, the MCP config needs the full path to the binary.
+- **Cowork cannot run CLI commands** on your host — it runs in a sandboxed Linux VM. All reads go through MCP tools (`list_skills`, `get_skill`), not filesystem.
+- **Use full absolute paths** in `claude_desktop_config.json` — `uv`, `skillshub`, and project paths must all be absolute. Desktop apps don't inherit shell PATH.
+- **Restart required** — Claude Desktop must be restarted after changing `claude_desktop_config.json`.
+- **No auto-sync needed** — Cowork reads from the repo via MCP (which does `git pull`), so it always gets the latest version without manual sync.
 
 ---
 
@@ -178,61 +186,38 @@ Start a **new** Claude Code session for each test.
 
 ### Setup
 
-OpenClaw typically runs on a remote machine (VM, server, Docker). All setup happens on that machine.
+OpenClaw runs remotely. All setup is done by talking to it in chat.
 
-1. **Install skillshub** on the OpenClaw host:
-   ```bash
-   pip install git+https://github.com/your-org/skillshub.git
-   ```
-   Or ask OpenClaw directly: "Install skillshub from git+https://github.com/your-org/skillshub.git"
+**Step 1 — Install skillshub.** Tell OpenClaw:
+> "Install skillshub: `pip install git+https://github.com/bernabe9/skillshub.git`"
 
-2. **Init skillshub** (run on the host or ask OpenClaw):
-   ```bash
-   skillshub init https://github.com/your-org/skills.git
-   ```
+**Step 2 — Connect to repo.** Tell OpenClaw:
+> "Run `skillshub init https://github.com/your-org/skills.git`"
 
-3. **Configure OpenClaw** — add to `openclaw.json`:
-   ```json
-   {
-     "skills": {
-       "load": {
-         "extraDirs": ["~/.agents/skills"]
-       }
-     },
-     "mcp": {
-       "servers": {
-         "skillshub": {
-           "command": "skillshub",
-           "args": ["mcp"],
-           "transport": "stdio"
-         }
-       }
-     }
-   }
-   ```
+**Step 3 — Add MCP server for write-back.** Tell OpenClaw:
+> "Add an MCP server to your config: name `skillshub`, command `skillshub`, args `["mcp"]`, transport `stdio`. Then restart to pick it up."
 
-4. **Sync skills:**
-   ```bash
-   skillshub sync
-   ```
-   Or ask OpenClaw: "Run `skillshub sync` to pull the latest team skills"
+**Step 4 — Keep skills fresh.** Tell OpenClaw:
+> "Run `skillshub sync` every 5 minutes to keep skills fresh"
+
+Or run `skillshub sync` manually whenever you want the latest: "sync my skills" / "run `skillshub sync`"
 
 ### Test Cases
 
-#### T1: Skills appear in OpenClaw catalog
-- Run `openclaw skills list --verbose` on the host
-- **Expected:** Skills from the repo appear in the list
+#### T1: Skills synced after init
+- After init, OpenClaw should report which skills were synced
+- **Expected:** Shows `hello-world` (or whatever skills are in the repo)
 
 #### T2: Native skill activation
-- Say "say hello" (or use `/hello-world` if user-invocable)
-- **Expected:** OpenClaw activates the skill from `~/.agents/skills/`
+- Say "say hello"
+- **Expected:** OpenClaw activates the hello-world skill
 
 #### T3: File access works
 - Use a skill that references scripts (e.g., "deploy to staging")
 - **Expected:** OpenClaw reads `scripts/deploy.sh` from the skill directory using normal file access
 
 #### T4: Write-back (update_skill)
-- Say "update the hello-world skill to also include a joke"
+- Say "update the hello-world skill to also include a fun fact"
 - **Expected:** OpenClaw calls `update_skill` MCP tool, commit appears on GitHub
 
 #### T5: Write-back (create_skill)
@@ -244,11 +229,16 @@ OpenClaw typically runs on a remote machine (VM, server, Docker). All setup happ
 - Switch to Claude Code, start new session (hook syncs)
 - **Expected:** The updated skill is available in Claude Code
 
+#### T7: Freshness
+- Push a skill update from Claude Code
+- Tell OpenClaw "run `skillshub sync`" (or wait for the periodic sync)
+- **Expected:** OpenClaw picks up the updated skill
+
 ### Known Gotchas
 - OpenClaw runs remotely — `skillshub` must be installed on the host machine, not your local machine.
-- OpenClaw watches `~/.agents/skills/` via chokidar — after `skillshub sync`, changes should be picked up automatically without restart.
-- The `extraDirs` config is needed if OpenClaw doesn't scan `~/.agents/skills/` by default (it does scan it as `personalAgentsSkillsDir` in recent versions).
-- Git auth: the host machine needs GitHub access (SSH key or token) for push to work.
+- OpenClaw watches skill directories via chokidar — after `skillshub sync`, changes should be picked up without restart.
+- Git auth: the host machine needs GitHub access for push to work. For public repos, read-only sync works without auth. For write-back (push), the host needs a GitHub token or SSH key.
+- No auto-sync hook: unlike Claude Code, OpenClaw doesn't have a SessionStart hook. Use periodic sync ("run skillshub sync every 5 minutes") or manual sync.
 
 ---
 

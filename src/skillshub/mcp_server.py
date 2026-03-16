@@ -1,4 +1,4 @@
-"""Local MCP server for SkillsHub write-back from agent conversations."""
+"""Local MCP server for SkillsHub — read and write shared agent skills."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
 from .config import get_skills_dir
-from .repo import commit_and_push, pull
+from .repo import commit_and_push, list_skills as repo_list_skills, pull
 from .sync_engine import sync_single_skill
 from .validation import validate_skill_name
 
@@ -17,8 +17,9 @@ mcp = FastMCP(
     "skillshub",
     instructions=(
         "SkillsHub manages your organization's shared AI agent skills. "
-        "Skills are synced to ~/.agents/skills/ — if they're not there yet, "
-        "run `skillshub sync` to pull the latest skills from the team repository. "
+        "If you have native skill support (e.g. ~/.agents/skills/ or ~/.claude/skills/), "
+        "prefer using skills from the filesystem — they are already synced there. "
+        "Use list_skills and get_skill only if you cannot access skills from the filesystem directly. "
         "Use update_skill to improve existing skills based on what you learned in this conversation. "
         "Use create_skill to add new skills to the shared directory. "
         "Changes are automatically committed and pushed to the team's GitHub repository."
@@ -76,6 +77,79 @@ def _write_files_and_publish(
     # Sync to local agent directories immediately
     sync_single_skill(skill_name)
     return {"status": "applied", "commit": sha}
+
+
+@mcp.tool()
+def list_skills(search: str = "") -> str:
+    """List all available skills in the organization's shared directory.
+
+    Returns skill names and descriptions. Use this to discover what skills
+    are available before loading one with get_skill.
+
+    Args:
+        search: Optional search term to filter skills by name or description.
+
+    Returns:
+        JSON array of skills with name and description.
+    """
+    _safe_pull()
+
+    skills = repo_list_skills()
+    if search:
+        term = search.lower()
+        skills = [
+            s
+            for s in skills
+            if term in s["name"].lower() or term in s["description"].lower()
+        ]
+
+    return json.dumps(
+        [{"name": s["name"], "description": s["description"]} for s in skills],
+        indent=2,
+    )
+
+
+@mcp.tool()
+def get_skill(skill_name: str) -> str:
+    """Load the full instructions for a skill.
+
+    Returns the complete SKILL.md content plus a list of available resource
+    files (scripts, references, assets) within the skill directory.
+
+    Args:
+        skill_name: Name of the skill to load.
+
+    Returns:
+        JSON with the skill content and list of resource file paths.
+    """
+    skill_dir = get_skills_dir() / skill_name
+    if not skill_dir.exists():
+        return json.dumps(
+            {
+                "status": "error",
+                "message": f"Skill '{skill_name}' not found. Use list_skills to see available skills.",
+            }
+        )
+
+    skill_md = skill_dir / "SKILL.md"
+    if not skill_md.exists():
+        return json.dumps(
+            {"status": "error", "message": f"No SKILL.md in '{skill_name}'."}
+        )
+
+    resources = [
+        str(f.relative_to(skill_dir))
+        for f in sorted(skill_dir.rglob("*"))
+        if f.is_file() and f.name not in ("SKILL.md", ".skillshub")
+    ]
+
+    return json.dumps(
+        {
+            "name": skill_name,
+            "content": skill_md.read_text(),
+            "resources": resources,
+        }
+    )
 
 
 @mcp.tool()

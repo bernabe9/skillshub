@@ -78,15 +78,21 @@ claude mcp add --transport stdio --scope user skillshub -- uv run --project /pat
 
 #### OpenClaw
 
-Add to `openclaw.json`:
+OpenClaw runs remotely, so you interact with it through chat. Tell it:
+
+**Step 1 — Install:**
+> "Install skillshub: `pip install git+https://github.com/bernabe9/skillshub.git`"
+
+**Step 2 — Connect to repo:**
+> "Run `skillshub init https://github.com/your-org/skills.git`"
+
+**Step 3 — Add MCP server for write-back:**
+> "Add an MCP server to your config: name `skillshub`, command `skillshub`, args `["mcp"]`, transport `stdio`. Then restart to pick it up."
+
+Or tell it to add this to `openclaw.json`:
 
 ```json
 {
-  "skills": {
-    "load": {
-      "extraDirs": ["~/.agents/skills"]
-    }
-  },
   "mcp": {
     "servers": {
       "skillshub": {
@@ -99,22 +105,67 @@ Add to `openclaw.json`:
 }
 ```
 
+**Step 4 — Keep skills fresh:**
+> "Run `skillshub sync` every 5 minutes to keep skills fresh"
+
+Or run `skillshub sync` manually whenever you want the latest skills.
+
+**Verify:** Tell OpenClaw "say hello" — it should activate the skill from the repo.
+
 #### Claude Cowork
 
-Add to `claude_desktop_config.json`:
+Cowork runs on your local machine but executes commands in a sandboxed VM. It **cannot** run CLI commands like `skillshub sync` directly. Instead, it accesses skills entirely through the MCP server's read tools (`list_skills`, `get_skill`).
+
+**Step 1 — Install skillshub** (from your terminal, not Cowork):
+
+```bash
+uv tool install /path/to/skillshub
+# or: pip install git+https://github.com/bernabe9/skillshub.git
+```
+
+**Step 2 — Connect to repo** (from your terminal):
+
+```bash
+skillshub init https://github.com/your-org/skills.git
+```
+
+**Step 3 — Add MCP server** to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "skillshub": {
-      "command": "skillshub",
+      "command": "/full/path/to/uv",
+      "args": ["run", "--project", "/path/to/skillshub", "skillshub", "mcp"]
+    }
+  }
+}
+```
+
+> **Important:** Use full absolute paths — Cowork's desktop process doesn't inherit your shell's PATH. Find your paths with `which uv` and use the full result.
+
+If you installed skillshub globally (`uv tool install` or `pip install`), you can use the simpler config — but still use the full path:
+
+```json
+{
+  "mcpServers": {
+    "skillshub": {
+      "command": "/full/path/to/skillshub",
       "args": ["mcp"]
     }
   }
 }
 ```
 
-The Cowork agent can run `skillshub sync` when it needs to pull skills.
+**Step 4 — Restart Claude Desktop** to pick up the MCP config.
+
+**Step 5 — Verify.** In Cowork, ask "what skills are available in skillshub?" — it should call `list_skills` and show your team's skills.
+
+**How Cowork uses skills:**
+- **Discovery:** Cowork calls `list_skills` MCP tool (not filesystem)
+- **Reading:** Cowork calls `get_skill` MCP tool to load full instructions
+- **Writing:** Cowork calls `update_skill` / `create_skill` to modify or create skills
+- **Sync not needed:** Cowork reads directly from the repo via MCP, so it always gets the latest version
 
 #### Other agents (Cursor, Copilot, Gemini CLI, etc.)
 
