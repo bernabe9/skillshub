@@ -11,7 +11,6 @@ from mcp.server.fastmcp import FastMCP
 from .repo import (
     commit_and_push,
     find_skill_dir,
-    get_default_skills_dir,
     list_skills as repo_list_skills,
     pull,
 )
@@ -206,6 +205,7 @@ def create_skill(
     name: str,
     description: str,
     files: list[dict],
+    target_path: str = "",
 ) -> str:
     """Create a new skill in the organization's shared skills directory.
 
@@ -217,6 +217,8 @@ def create_skill(
         files: List of files for the skill. Must include SKILL.md. Each item has
                'path' and 'content'. Example paths: 'SKILL.md', 'scripts/build.sh',
                'references/guide.md'.
+        target_path: Where to create the skill within the repo (e.g. 'engineering/skills').
+               Defaults to 'skills/' at the repo root.
 
     Returns:
         JSON with status and skill name
@@ -242,7 +244,15 @@ def create_skill(
             }
         )
 
-    skill_dir = get_default_skills_dir() / name
+    from .config import get_repo_path
+
+    if target_path:
+        base = get_repo_path() / target_path
+    else:
+        base = get_repo_path() / "skills"
+    base.mkdir(parents=True, exist_ok=True)
+
+    skill_dir = base / name
     skill_dir.mkdir(parents=True)
     result = _write_files_and_publish(name, skill_dir, files, f"Create skill: {name}")
     if result["status"] == "applied":

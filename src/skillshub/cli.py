@@ -237,7 +237,13 @@ def rollback(skill_name: str, ref: str) -> None:
 
 @cli.command()
 @click.argument("name")
-def create(name: str) -> None:
+@click.option(
+    "--path",
+    "target_path",
+    default=None,
+    help="Skills path within the repo (e.g. engineering/skills). Defaults to skills/.",
+)
+def create(name: str, target_path: str | None) -> None:
     """Scaffold a new skill with a SKILL.md template."""
     error = validate_skill_name(name)
     if error:
@@ -248,7 +254,12 @@ def create(name: str) -> None:
         click.echo(f"Skill '{name}' already exists.", err=True)
         raise SystemExit(1)
 
-    skill_dir = get_default_skills_dir() / name
+    if target_path:
+        base = get_repo_path() / target_path
+    else:
+        base = get_repo_path() / "skills"
+    base.mkdir(parents=True, exist_ok=True)
+    skill_dir = base / name
     skill_dir.mkdir(parents=True, exist_ok=True)
     (skill_dir / "SKILL.md").write_text(
         f"""---
