@@ -74,9 +74,7 @@ GitHub Repo (source of truth)
 
 ## Target Users
 
-1. **Engineering teams** using multiple AI agents who want consistent, up-to-date skills across all tools
-2. **Platform/DevEx teams** who maintain organizational processes (deployment, review, testing) as codified skills
-3. **Individual developers** who want their personal skills synced across agents without manual copying
+Any knowledge worker who uses AI agents to automate operations — engineering, sales, security, legal, HR, finance, support. If you have a repeatable process that you can describe, SkillsHub turns it into a shared, always-fresh skill that any teammate can run from any agent.
 
 ## Key Differentiators
 
