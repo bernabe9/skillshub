@@ -316,6 +316,101 @@ def reset() -> None:
 
 
 @cli.command()
+@click.argument("agent", type=click.Choice(["claude-code"]))
+def setup(agent: str) -> None:
+    """Configure an agent to use SkillsHub.
+
+    Currently supports: claude-code
+    """
+    if agent == "claude-code":
+        _setup_claude_code()
+
+
+def _setup_claude_code() -> None:
+    """Configure Claude Code with MCP server and SessionStart hook."""
+    import json as json_mod
+    import subprocess
+
+    skillshub_bin = shutil.which("skillshub")
+    if not skillshub_bin:
+        click.echo("Error: 'skillshub' not found in PATH.", err=True)
+        raise SystemExit(1)
+
+    # 1. Add MCP server via claude CLI
+    click.echo("Adding MCP server...")
+    try:
+        subprocess.run(
+            [
+                "claude",
+                "mcp",
+                "add",
+                "--transport",
+                "stdio",
+                "--scope",
+                "user",
+                "skillshub",
+                "--",
+                skillshub_bin,
+                "mcp",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        click.echo("  MCP server added.")
+    except FileNotFoundError:
+        click.echo(
+            "  Warning: 'claude' CLI not found. Add the MCP server manually.", err=True
+        )
+    except subprocess.CalledProcessError as e:
+        if "already exists" in e.stderr.lower():
+            click.echo("  MCP server already configured.")
+        else:
+            click.echo(f"  Warning: {e.stderr.strip()}", err=True)
+
+    # 2. Add SessionStart hook to settings.json
+    click.echo("Adding SessionStart hook...")
+    settings_path = Path.home() / ".claude" / "settings.json"
+
+    settings: dict = {}
+    if settings_path.exists():
+        settings = json_mod.loads(settings_path.read_text())
+
+    hook_command = f"{skillshub_bin} sync"
+
+    # Check if hook already exists
+    existing_hooks = settings.get("hooks", {}).get("SessionStart", [])
+    already_configured = any(
+        any(h.get("command", "") == hook_command for h in group.get("hooks", []))
+        for group in existing_hooks
+    )
+
+    if already_configured:
+        click.echo("  SessionStart hook already configured.")
+    else:
+        hooks = settings.setdefault("hooks", {})
+        session_hooks = hooks.setdefault("SessionStart", [])
+        session_hooks.append(
+            {
+                "matcher": "startup|resume",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": hook_command,
+                        "timeout": 30,
+                    }
+                ],
+            }
+        )
+        settings_path.parent.mkdir(parents=True, exist_ok=True)
+        settings_path.write_text(json_mod.dumps(settings, indent=2) + "\n")
+        click.echo("  SessionStart hook added.")
+
+    click.echo("\nDone! Start a new Claude Code session to activate.")
+    click.echo("Verify with: /mcp (should show skillshub · ✔ connected)")
+
+
+@cli.command()
 def mcp() -> None:
     """Start the local MCP server (stdio transport)."""
     from .mcp_server import run_mcp_server

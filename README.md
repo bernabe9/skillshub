@@ -29,7 +29,12 @@ This clones the repo and syncs all skills to your local agent directories.
 
 ### Configure your agent
 
-See [Agent Setup Details](#agent-setup-details) below for your specific agent (Claude Code, OpenClaw, Cowork, etc.).
+**Claude Code** (one command):
+```bash
+skillshub setup claude-code
+```
+
+For other agents (OpenClaw, Cowork, etc.), see [Agent Setup Details](#agent-setup-details) below.
 
 ---
 
@@ -94,30 +99,11 @@ Or ask your agent: *"create a skill called my-first-skill that does X"*
 
 ### Claude Code
 
-Two things: a **hook** (auto-sync on session start) and the **MCP server** (write-back from conversations).
-
-**MCP server:**
 ```bash
-claude mcp add --transport stdio --scope user skillshub -- skillshub mcp
+skillshub setup claude-code
 ```
 
-**SessionStart hook** in `~/.claude/settings.json`:
-```json
-{
-  "hooks": {
-    "SessionStart": [{
-      "matcher": "startup|resume",
-      "hooks": [{
-        "type": "command",
-        "command": "skillshub sync",
-        "timeout": 30
-      }]
-    }]
-  }
-}
-```
-
-**Verify:** Start a new session, run `/mcp` — should show `skillshub · ✔ connected`.
+This adds the MCP server and SessionStart hook automatically. Start a new session, run `/mcp` — should show `skillshub · ✔ connected`.
 
 **How it works:** Skills sync to `~/.agents/skills/` on session start. Claude activates them natively (slash commands, auto-activation). Write-back goes through the MCP `update_skill`/`create_skill` tools.
 
