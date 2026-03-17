@@ -40,19 +40,19 @@ def get_sync_targets() -> list[str]:
 
 
 def get_skills_paths() -> list[str]:
-    """Return the list of skills/ paths within the repo to scan.
+    """Return the list of paths within the repo to scan.
 
-    If empty or not set, auto-discovers all directories containing skills/*/SKILL.md.
+    If empty or not set, auto-discovers all directories containing SKILL.md.
     """
     config = load_config()
     return config.get("skills_paths", [])
 
 
 def get_skills_dirs() -> list[Path]:
-    """Return resolved paths to all skills directories to scan.
+    """Return resolved paths to all directories containing skills.
 
     If skills_paths is configured, uses those. Otherwise auto-discovers
-    by scanning the repo for any directory pattern: */skills/*/SKILL.md
+    by scanning the repo for any SKILL.md file and deriving grouping directories.
     """
     repo = get_repo_path()
     configured = get_skills_paths()
@@ -60,27 +60,17 @@ def get_skills_dirs() -> list[Path]:
     if configured:
         return [repo / p for p in configured]
 
-    # Auto-discover: scan for */skills/ directories containing skill subdirs
-    # Also check repo root skills/ for backward compat
-    found = []
-    root_skills = repo / "skills"
-    if root_skills.is_dir() and _has_skills(root_skills):
-        found.append(root_skills)
+    # Auto-discover: find all SKILL.md files and derive grouping directories
+    found = set()
+    for skill_md in repo.rglob("SKILL.md"):
+        rel = skill_md.relative_to(repo)
+        # Skip hidden directories (.git, .github, etc.)
+        if any(part.startswith(".") for part in rel.parts):
+            continue
+        # Need at least <group>/<skill>/SKILL.md or <skill>/SKILL.md
+        if len(rel.parts) < 2:
+            continue
+        # skill_md.parent = skill dir, skill_md.parent.parent = grouping dir
+        found.add(skill_md.parent.parent)
 
-    for child in sorted(repo.iterdir()):
-        if child.is_dir() and not child.name.startswith("."):
-            skills_subdir = child / "skills"
-            if skills_subdir.is_dir() and _has_skills(skills_subdir):
-                found.append(skills_subdir)
-
-    return found if found else [root_skills]
-
-
-def _has_skills(skills_dir: Path) -> bool:
-    """Check if a directory contains at least one skill (subdir with SKILL.md)."""
-    try:
-        return any(
-            (d / "SKILL.md").exists() for d in skills_dir.iterdir() if d.is_dir()
-        )
-    except OSError:
-        return False
+    return sorted(found) if found else [repo / "skills"]
