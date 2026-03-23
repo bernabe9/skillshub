@@ -248,16 +248,28 @@ def create_skill(
 
     _safe_pull()
 
-    # Check existence after pull to avoid TOCTOU
-    if find_skill_dir(name) is not None:
+    # Check existence after pull — scan the entire repo so we never create a
+    # duplicate even if the existing skill lives outside discovered skill dirs.
+    from .config import get_repo_path
+
+    repo_root = get_repo_path()
+    existing = [
+        p.parent
+        for p in repo_root.rglob("SKILL.md")
+        if p.parent.name == name
+        and not any(part.startswith(".") for part in p.relative_to(repo_root).parts)
+    ]
+    if existing:
+        paths = [str(p.relative_to(repo_root)) for p in existing]
         return json.dumps(
             {
                 "status": "error",
-                "message": f"Skill '{name}' already exists. Use update_skill to modify it.",
+                "message": (
+                    f"Skill '{name}' already exists at: {', '.join(paths)}. "
+                    f"Use update_skill to modify it."
+                ),
             }
         )
-
-    from .config import get_repo_path
 
     if target_path:
         base = get_repo_path() / target_path
